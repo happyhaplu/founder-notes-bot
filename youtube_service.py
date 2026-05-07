@@ -66,38 +66,46 @@ def get_transcript_via_api(video_id: str) -> Tuple[Optional[str], Optional[str]]
         return None, str(e)
 
 
+def _run_ytdlp_with_client(url: str, tmpdir: str, player_client: str) -> Optional[str]:
+    """Try yt-dlp with a specific player client. Returns vtt file path or None."""
+    import sys
+    cmd = [
+        sys.executable, "-m", "yt_dlp",
+        "--skip-download",
+        "--write-auto-sub",
+        "--write-sub",
+        "--sub-langs", "en.*,en",
+        "--sub-format", "vtt",
+        "--extractor-args", f"youtube:player_client={player_client}",
+        "--no-check-certificates",
+        "--output", os.path.join(tmpdir, f"sub_{player_client}"),
+        url
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
+    for f in os.listdir(tmpdir):
+        if f.endswith(".vtt") and player_client in f:
+            return os.path.join(tmpdir, f)
+    # fallback: return any new vtt file
+    for f in os.listdir(tmpdir):
+        if f.endswith(".vtt"):
+            return os.path.join(tmpdir, f)
+    logger.warning(f"[yt-dlp:{player_client}] No vtt found. stderr: {result.stderr[:300]}")
+    return None
+
+
 def get_transcript_via_ytdlp(url: str) -> Tuple[Optional[str], Optional[str]]:
     """Use yt-dlp to download auto-generated subtitles as transcript."""
     try:
-        import sys
         with tempfile.TemporaryDirectory() as tmpdir:
-            cmd = [
-                sys.executable, "-m", "yt_dlp",
-                "--skip-download",
-                "--write-auto-sub",
-                "--write-sub",
-                "--sub-langs", "en.*,en",
-                "--sub-format", "vtt",
-                "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                "--extractor-args", "youtube:player_client=web",
-                "--no-check-certificates",
-                "--output", os.path.join(tmpdir, "sub"),
-                url
-            ]
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=90
-            )
-
-            # Find the downloaded .vtt file
-            vtt_file = None
-            for f in os.listdir(tmpdir):
-                if f.endswith(".vtt"):
-                    vtt_file = os.path.join(tmpdir, f)
+            # Try multiple player clients — ios/tv_embedded bypass cloud IP blocks
+            for client in ["ios", "tv_embedded", "mweb", "web"]:
+                logger.info(f"[yt-dlp] Trying player_client={client}...")
+                vtt_file = _run_ytdlp_with_client(url, tmpdir, client)
+                if vtt_file:
                     break
 
             if not vtt_file:
-                logger.warning(f"[yt-dlp] No subtitle file found. stderr: {result.stderr[:500]}")
-                return None, "No subtitles found via yt-dlp"
+                return None, "No subtitles found via yt-dlp (all clients failed)"
 
             with open(vtt_file, "r", encoding="utf-8") as f:
                 raw = f.read()
@@ -182,7 +190,7 @@ def process_youtube_url(url: str) -> dict:
         result["transcript"] = transcript
         return result
 
-    result["transcript_error"] = "Could not get transcript from this video. It may have subtitles disabled."
+    result["transcript_error"] = "Could not get transcript from this video. It may have subtitles disabled or be blocked by YouTube on this server."
     logger.warning(f"Both transcript methods failed for {video_id}")
     return result
 
