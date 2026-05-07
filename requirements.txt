@@ -1,0 +1,18 @@
+# Telegram Bot
+python-telegram-bot==21.6
+
+# OpenRouter API (uses requests)
+requests==2.32.3
+
+# YouTube Transcript
+youtube-transcript-api==1.2.4
+
+# Environment variables
+python-dotenv==1.0.1
+
+# Web server for webhook (Render)
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+
+# HTTP client
+httpx==0.27.2
