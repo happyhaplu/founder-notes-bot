@@ -69,6 +69,9 @@ def get_transcript_via_api(video_id: str) -> Tuple[Optional[str], Optional[str]]
 def _run_ytdlp_with_client(url: str, tmpdir: str, player_client: str) -> Optional[str]:
     """Try yt-dlp with a specific player client. Returns vtt file path or None."""
     import sys
+    # Use a fresh subdir per client to avoid picking up previous files
+    client_dir = os.path.join(tmpdir, player_client)
+    os.makedirs(client_dir, exist_ok=True)
     cmd = [
         sys.executable, "-m", "yt_dlp",
         "--skip-download",
@@ -78,17 +81,13 @@ def _run_ytdlp_with_client(url: str, tmpdir: str, player_client: str) -> Optiona
         "--sub-format", "vtt",
         "--extractor-args", f"youtube:player_client={player_client}",
         "--no-check-certificates",
-        "--output", os.path.join(tmpdir, f"sub_{player_client}"),
+        "--output", os.path.join(client_dir, "sub"),
         url
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
-    for f in os.listdir(tmpdir):
-        if f.endswith(".vtt") and player_client in f:
-            return os.path.join(tmpdir, f)
-    # fallback: return any new vtt file
-    for f in os.listdir(tmpdir):
+    for f in os.listdir(client_dir):
         if f.endswith(".vtt"):
-            return os.path.join(tmpdir, f)
+            return os.path.join(client_dir, f)
     logger.warning(f"[yt-dlp:{player_client}] No vtt found. stderr: {result.stderr[:300]}")
     return None
 
@@ -97,8 +96,8 @@ def get_transcript_via_ytdlp(url: str) -> Tuple[Optional[str], Optional[str]]:
     """Use yt-dlp to download auto-generated subtitles as transcript."""
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Try multiple player clients — ios/tv_embedded bypass cloud IP blocks
-            for client in ["ios", "tv_embedded", "mweb", "web"]:
+            # Try multiple player clients — android clients bypass cloud IP bot checks
+            for client in ["android", "android_embedded", "android_vr", "ios"]:
                 logger.info(f"[yt-dlp] Trying player_client={client}...")
                 vtt_file = _run_ytdlp_with_client(url, tmpdir, client)
                 if vtt_file:
