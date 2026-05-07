@@ -1,6 +1,8 @@
 import os
 import logging
 import asyncio
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from dotenv import load_dotenv
 from telegram import Update, Bot
 from telegram.ext import (
@@ -267,9 +269,29 @@ async def _polling_coroutine():
     await asyncio.Event().wait()
 
 
+def _start_health_server():
+    """Start a minimal HTTP server for health checks (used by Coolify/proxies)."""
+    port = int(os.getenv("PORT", 8443))
+
+    class HealthHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"OK")
+
+        def log_message(self, *args):
+            pass  # suppress access logs
+
+    server = HTTPServer(("0.0.0.0", port), HealthHandler)
+    logger.info(f"Health server listening on port {port}")
+    server.serve_forever()
+
+
 def run_polling():
     """Run bot in polling mode (local development)."""
     logger.info("Starting bot in POLLING mode...")
+    t = threading.Thread(target=_start_health_server, daemon=True)
+    t.start()
     asyncio.run(_polling_coroutine())
 
 
