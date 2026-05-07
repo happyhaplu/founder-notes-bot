@@ -4,8 +4,6 @@ services:
   founder-notes-bot:
     build: .
     restart: unless-stopped
-    ports:
-      - "8443:8443"
     environment:
       - TELEGRAM_BOT_TOKEN=8377181996:AAFtxD7gqkAM1hGT7TudX0U7Uaj7uiZ2UcA
       - OPENROUTER_API_KEY=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
