@@ -255,14 +255,22 @@ def create_app() -> Application:
 
 # ─── Run Modes ─────────────────────────────────────────────────────────────────
 
-def run_polling():
-    """Run bot in polling mode (local development)."""
-    logger.info("Starting bot in POLLING mode...")
+async def _polling_coroutine():
     app = create_app()
-    app.run_polling(
+    await app.initialize()
+    await app.updater.start_polling(
         allowed_updates=Update.ALL_TYPES,
         drop_pending_updates=True,
     )
+    await app.start()
+    # Run until interrupted
+    await asyncio.Event().wait()
+
+
+def run_polling():
+    """Run bot in polling mode (local development)."""
+    logger.info("Starting bot in POLLING mode...")
+    asyncio.run(_polling_coroutine())
 
 
 def run_webhook():
