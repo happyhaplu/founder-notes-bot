@@ -1,0 +1,15 @@
+version: "3.9"
+
+services:
+  founder-notes-bot:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "10000:10000"
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - CHANNEL_ID=${CHANNEL_ID}
+      - RUN_MODE=${RUN_MODE:-webhook}
+      - WEBHOOK_URL=${WEBHOOK_URL}
+      - PORT=10000
