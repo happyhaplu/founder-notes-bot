@@ -6,6 +6,7 @@ requests==2.32.3
 
 # YouTube Transcript
 youtube-transcript-api==1.2.4
+yt-dlp
 
 # Environment variables
 python-dotenv==1.0.1
