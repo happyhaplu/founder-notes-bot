@@ -58,7 +58,7 @@ def get_transcript_via_api(video_id: str) -> Tuple[Optional[str], Optional[str]]
         if len(text) > 80000:
             text = text[:80000]
 
-        logger.info(f"[API] Transcript fetched: {len(text)} chars ({chosen.language})")
+        logger.info(f"[API] Transcript fetched: {len(text)} chars ({chosen.language_code})")
         return text, None
 
     except Exception as e:
@@ -76,13 +76,16 @@ def get_transcript_via_ytdlp(url: str) -> Tuple[Optional[str], Optional[str]]:
                 "--skip-download",
                 "--write-auto-sub",
                 "--write-sub",
-                "--sub-lang", "en",
+                "--sub-langs", "en.*,en",
                 "--sub-format", "vtt",
+                "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                "--extractor-args", "youtube:player_client=web",
+                "--no-check-certificates",
                 "--output", os.path.join(tmpdir, "sub"),
                 url
             ]
             result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=60
+                cmd, capture_output=True, text=True, timeout=90
             )
 
             # Find the downloaded .vtt file
@@ -93,7 +96,7 @@ def get_transcript_via_ytdlp(url: str) -> Tuple[Optional[str], Optional[str]]:
                     break
 
             if not vtt_file:
-                logger.warning(f"[yt-dlp] No subtitle file found. stderr: {result.stderr[:200]}")
+                logger.warning(f"[yt-dlp] No subtitle file found. stderr: {result.stderr[:500]}")
                 return None, "No subtitles found via yt-dlp"
 
             with open(vtt_file, "r", encoding="utf-8") as f:
