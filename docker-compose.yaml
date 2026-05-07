@@ -5,11 +5,11 @@ services:
     build: .
     restart: unless-stopped
     ports:
-      - "10000:10000"
+      - "8443:8443"
     environment:
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - CHANNEL_ID=${CHANNEL_ID}
-      - RUN_MODE=${RUN_MODE:-webhook}
-      - WEBHOOK_URL=${WEBHOOK_URL}
-      - PORT=10000
+      - TELEGRAM_BOT_TOKEN=8377181996:AAFtxD7gqkAM1hGT7TudX0U7Uaj7uiZ2UcA
+      - OPENROUTER_API_KEY=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
+      - CHANNEL_ID=@foundernoteshappy
+      - RUN_MODE=polling
+      - WEBHOOK_URL=
+      - PORT=8443
