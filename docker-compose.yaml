@@ -14,4 +14,4 @@ services:
       - WEBHOOK_URL=
       - PORT=8443
       - YOUTUBE_PROXY=http://suyzjfei:bx2pwiechcou@31.59.20.176:6754/
-      - SUPADATA_API_KEY=
+      - SUPADATA_API_KEY=sd_f2e10974d2a7082f7650be7644ea82d5
