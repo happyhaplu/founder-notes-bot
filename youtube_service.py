@@ -30,25 +30,54 @@ def is_valid_youtube_url(url: str) -> bool:
     return any(domain in url.lower() for domain in youtube_domains)
 
 
+HARDCODED_PROXY = "http://suyzjfei:bx2pwiechcou@31.59.20.176:6754/"
+
+
 def _get_proxy() -> Optional[str]:
-    """Get proxy URL from environment variable if set."""
-    return os.getenv("HTTP_PROXY") or os.getenv("HTTPS_PROXY") or os.getenv("YOUTUBE_PROXY")
+    """Get proxy URL - env var takes priority, falls back to hardcoded."""
+    proxy = os.getenv("YOUTUBE_PROXY") or os.getenv("HTTP_PROXY") or os.getenv("HTTPS_PROXY")
+    if not proxy:
+        proxy = HARDCODED_PROXY
+    logger.info(f"[proxy] Using proxy: {proxy[:30]}...")
+    return proxy
+
+
+def get_transcript_via_supadata(video_id: str) -> Tuple[Optional[str], Optional[str]]:
+    """Fetch transcript using Supadata API (handles cloud IP blocks)."""
+    api_key = os.getenv("SUPADATA_API_KEY")
+    if not api_key:
+        return None, "SUPADATA_API_KEY not set"
+    try:
+        import requests
+        url = f"https://api.supadata.ai/v1/youtube/transcript?videoId={video_id}&text=true"
+        headers = {"x-api-key": api_key}
+        response = requests.get(url, headers=headers, timeout=30)
+        if response.status_code != 200:
+            return None, f"Supadata API error: {response.status_code} {response.text[:100]}"
+        data = response.json()
+        text = data.get("content", "") or data.get("transcript", "")
+        if not text:
+            return None, "Supadata returned empty transcript"
+        if len(text) > 80000:
+            text = text[:80000]
+        logger.info(f"[Supadata] Transcript fetched: {len(text)} chars")
+        return text, None
+    except Exception as e:
+        logger.warning(f"[Supadata] Failed: {e}")
+        return None, str(e)
 
 
 def get_transcript_via_api(video_id: str) -> Tuple[Optional[str], Optional[str]]:
     """Fetch transcript using youtube-transcript-api v1.x."""
     try:
+        import requests
         from youtube_transcript_api import YouTubeTranscriptApi
 
         proxy = _get_proxy()
+        session = requests.Session()
         if proxy:
-            from youtube_transcript_api._transcripts import TranscriptListFetcher
-            import requests
-            session = requests.Session()
             session.proxies = {"http": proxy, "https": proxy}
-            fetcher = YouTubeTranscriptApi(http_client=session)
-        else:
-            fetcher = YouTubeTranscriptApi()
+        fetcher = YouTubeTranscriptApi(http_client=session)
         transcript_list = fetcher.list(video_id)
 
         # Pick English first, then any available
@@ -191,21 +220,29 @@ def process_youtube_url(url: str) -> dict:
     result["valid"] = True
     result["video_id"] = video_id
 
-    # Method 1: youtube-transcript-api
+    # Method 1: Supadata API (cloud-friendly, no IP blocks)
+    transcript, error = get_transcript_via_supadata(video_id)
+    if transcript:
+        result["transcript"] = transcript
+        return result
+
+    logger.info(f"Method 1 (Supadata) failed ({error}), trying youtube-transcript-api...")
+
+    # Method 2: youtube-transcript-api with proxy
     transcript, error = get_transcript_via_api(video_id)
     if transcript:
         result["transcript"] = transcript
         return result
 
-    logger.info(f"Method 1 failed ({error}), trying yt-dlp...")
+    logger.info(f"Method 2 failed ({error}), trying yt-dlp...")
 
-    # Method 2: yt-dlp subtitle download
+    # Method 3: yt-dlp subtitle download
     transcript, error = get_transcript_via_ytdlp(url)
     if transcript:
         result["transcript"] = transcript
         return result
 
     result["transcript_error"] = "Could not get transcript from this video. It may have subtitles disabled or be blocked by YouTube on this server."
-    logger.warning(f"Both transcript methods failed for {video_id}")
+    logger.warning(f"All transcript methods failed for {video_id}")
     return result
 
