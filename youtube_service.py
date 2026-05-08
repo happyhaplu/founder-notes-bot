@@ -30,12 +30,25 @@ def is_valid_youtube_url(url: str) -> bool:
     return any(domain in url.lower() for domain in youtube_domains)
 
 
+def _get_proxy() -> Optional[str]:
+    """Get proxy URL from environment variable if set."""
+    return os.getenv("HTTP_PROXY") or os.getenv("HTTPS_PROXY") or os.getenv("YOUTUBE_PROXY")
+
+
 def get_transcript_via_api(video_id: str) -> Tuple[Optional[str], Optional[str]]:
     """Fetch transcript using youtube-transcript-api v1.x."""
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
 
-        fetcher = YouTubeTranscriptApi()
+        proxy = _get_proxy()
+        if proxy:
+            from youtube_transcript_api._transcripts import TranscriptListFetcher
+            import requests
+            session = requests.Session()
+            session.proxies = {"http": proxy, "https": proxy}
+            fetcher = YouTubeTranscriptApi(http_client=session)
+        else:
+            fetcher = YouTubeTranscriptApi()
         transcript_list = fetcher.list(video_id)
 
         # Pick English first, then any available
@@ -82,8 +95,11 @@ def _run_ytdlp_with_client(url: str, tmpdir: str, player_client: str) -> Optiona
         "--extractor-args", f"youtube:player_client={player_client}",
         "--no-check-certificates",
         "--output", os.path.join(client_dir, "sub"),
-        url
     ]
+    proxy = _get_proxy()
+    if proxy:
+        cmd += ["--proxy", proxy]
+    cmd.append(url)
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
     for f in os.listdir(client_dir):
         if f.endswith(".vtt"):
